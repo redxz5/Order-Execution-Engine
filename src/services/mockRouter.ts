@@ -5,6 +5,17 @@ export interface Quote {
   dex: 'Raydium' | 'Meteora';
   price: number;
   fee: number;
+  minAmountOut?: number;
+}
+
+/**
+ * Result of getting the best quote from multiple DEXes
+ */
+export interface BestQuoteResult {
+  dex: 'Raydium' | 'Meteora';
+  price: number;
+  fee: number;
+  minAmountOut: number;
 }
 
 /**
@@ -13,8 +24,10 @@ export interface Quote {
  */
 export class MockRouter {
   private readonly BASE_PRICE = 150; // Base price for SOL in USD
-  private readonly PRICE_VARIANCE = 0.005; // 0.5% price variance
-  private readonly DEX_FEE = 0.003; // 0.3% DEX fee
+  private readonly RAYDIUM_VARIANCE = 0.04; // 4% price variance for Raydium
+  private readonly METEORA_VARIANCE = 0.05; // 5% price variance for Meteora
+  private readonly RAYDIUM_FEE = 0.003; // 0.3% fee for Raydium
+  private readonly METEORA_FEE = 0.002; // 0.2% fee for Meteora
   private readonly MIN_NETWORK_DELAY_MS = 200;
   private readonly MAX_NETWORK_DELAY_MS = 500;
 
@@ -30,7 +43,7 @@ export class MockRouter {
   /**
    * Generates a random price with variance around base price
    * @param basePrice - Starting price before applying variance
-   * @param variance - Percentage variance (e.g., 0.005 for ±0.5%)
+   * @param variance - Percentage variance (e.g., 0.04 for ±4%)
    * @returns Price with random variance applied
    */
   private calculatePriceWithVariance(basePrice: number, variance: number): number {
@@ -48,6 +61,34 @@ export class MockRouter {
   }
 
   /**
+   * Calculates minimum amount out based on slippage tolerance
+   * @param amount - Input amount
+   * @param price - Price per token
+   * @param slippagePercent - Slippage tolerance (e.g., 1 for 1%)
+   * @returns Minimum amount out after slippage
+   */
+  private calculateMinAmountOut(amount: number, price: number, slippagePercent: number): number {
+    const expectedOut = amount * price;
+    const slippageFactor = 1 - (slippagePercent / 100);
+    return expectedOut * slippageFactor;
+  }
+
+  /**
+   * Validates input parameters for quote fetching
+   * @param tokenAddress - Token address to validate
+   * @param amount - Amount to validate
+   * @throws Error if inputs are invalid
+   */
+  private validateInputs(tokenAddress: string, amount: number): void {
+    if (!tokenAddress || tokenAddress.trim() === '') {
+      throw new Error('Invalid token address: Token address cannot be empty');
+    }
+    if (amount <= 0) {
+      throw new Error('Invalid amount: Amount must be greater than zero');
+    }
+  }
+
+  /**
    * Fetches quotes from multiple DEXes (Raydium and Meteora)
    * Simulates network delay and price variance
    * @param pair - Trading pair (e.g., "SOL/USDC")
@@ -60,16 +101,47 @@ export class MockRouter {
 
     const raydiumQuote: Quote = {
       dex: 'Raydium',
-      price: this.calculatePriceWithVariance(this.BASE_PRICE, this.PRICE_VARIANCE),
-      fee: this.DEX_FEE,
+      price: this.calculatePriceWithVariance(this.BASE_PRICE, this.RAYDIUM_VARIANCE),
+      fee: this.RAYDIUM_FEE,
     };
 
     const meteoraQuote: Quote = {
       dex: 'Meteora',
-      price: this.calculatePriceWithVariance(this.BASE_PRICE, this.PRICE_VARIANCE),
-      fee: this.DEX_FEE,
+      price: this.calculatePriceWithVariance(this.BASE_PRICE, this.METEORA_VARIANCE),
+      fee: this.METEORA_FEE,
     };
 
     return [raydiumQuote, meteoraQuote];
+  }
+
+  /**
+   * Gets the best quote from available DEXes with slippage protection
+   * @param tokenAddress - Address of the token to trade
+   * @param amount - Amount to trade
+   * @param slippagePercent - Slippage tolerance percentage (default: 1%)
+   * @returns Best quote with minimum amount out
+   * @throws Error if inputs are invalid
+   */
+  async getQuote(tokenAddress: string, amount: number, slippagePercent: number = 1): Promise<BestQuoteResult> {
+    this.validateInputs(tokenAddress, amount);
+
+    // Simulate realistic network delay
+    await this.simulateDelay(this.getNetworkDelay());
+
+    const raydiumPrice = this.calculatePriceWithVariance(this.BASE_PRICE, this.RAYDIUM_VARIANCE);
+    const meteoraPrice = this.calculatePriceWithVariance(this.BASE_PRICE, this.METEORA_VARIANCE);
+
+    // Select best DEX (lowest price is best for buy orders)
+    const isRaydiumBetter = raydiumPrice <= meteoraPrice;
+    const bestDex = isRaydiumBetter ? 'Raydium' : 'Meteora';
+    const bestPrice = isRaydiumBetter ? raydiumPrice : meteoraPrice;
+    const bestFee = isRaydiumBetter ? this.RAYDIUM_FEE : this.METEORA_FEE;
+
+    return {
+      dex: bestDex,
+      price: bestPrice,
+      fee: bestFee,
+      minAmountOut: this.calculateMinAmountOut(amount, bestPrice, slippagePercent),
+    };
   }
 }
