@@ -41,12 +41,31 @@ This project implements a mock Order Execution Engine for a decentralized exchan
 
 ## Running Tests
 
-The project includes 12 comprehensive unit and integration tests covering:
-- Routing logic (best price selection for buy/sell)
-- Queue behavior and concurrency
-- WebSocket lifecycle events
-- MockRouter functionality (network delay, price variance)
-- Order validation
+The project includes **56 comprehensive tests** across 4 test suites:
+
+### Test Coverage
+- **Order Tests (12 tests)**: Basic order validation, routing logic, and OrderExecutor integration
+- **MockRouter Tests (23 tests)**: 
+  - Best price selection (Raydium vs Meteora)
+  - Slippage calculation (1%, 2%, default scenarios)
+  - Fee handling (0.003 Raydium, 0.002 Meteora)
+  - Input validation (empty tokens, zero/negative amounts)
+  - High latency simulation (200-500ms)
+  - Price variance boundaries (±4% Raydium, ±5% Meteora)
+- **Queue Integration Tests (13 tests)**:
+  - Standard processing (single and multiple jobs)
+  - Concurrency limits (10 max concurrent, waiting queue)
+  - Retry logic (exponential backoff, max retries)
+  - Failure persistence (error messages, stack traces)
+  - Order idempotency (duplicate jobId handling)
+  - Queue state management (waiting→active→completed)
+- **WebSocket Integration Tests (8 tests)**:
+  - Full lifecycle (pending→routing→building→submitted→confirmed)
+  - Lifecycle failures (pending→routing→failed)
+  - Invalid order ID handling
+  - Premature disconnects (client closes, order continues)
+  - Simultaneous connections (order-specific routing)
+  - API validation (400 for missing fields, 202 for valid)
 
 Run tests with:
 ```bash
@@ -101,7 +120,10 @@ order-execution-engine/
 ├── scripts/
 │   └── simulate-orders.ts     # Order simulation script
 ├── tests/
-│   └── order.test.ts          # Test suite (12 tests)
+│   ├── order.test.ts          # Basic order tests (12 tests)
+│   ├── router.test.ts         # MockRouter unit tests (23 tests)
+│   ├── queue.test.ts          # Queue integration tests (13 tests)
+│   └── websocket.test.ts      # WebSocket integration tests (8 tests)
 ├── docker-compose.yml         # Redis & PostgreSQL services
 ├── package.json               # Dependencies and scripts
 └── tsconfig.json              # TypeScript configuration
@@ -133,12 +155,33 @@ order-execution-engine/
 
 ## Testing Strategy
 
-The test suite covers:
-1. **MockRouter Tests**: Quote generation, network delay, price variance
-2. **Routing Logic Tests**: Best price selection for buy/sell orders
-3. **Order Validation Tests**: Structure and field validation
-4. **Integration Tests**: OrderExecutor instantiation and lifecycle
-5. **Concurrency Tests**: Queue configuration validation
+The comprehensive test suite (56 tests) covers:
+
+1. **Unit Tests (MockRouter)**:
+   - Quote generation with controlled randomness (Math.random mocking)
+   - Network delay simulation using fake timers
+   - Price variance boundaries per DEX
+   - Fee calculations and best price selection
+   - Input validation and error handling
+
+2. **Integration Tests (Queue)**:
+   - BullMQ job processing with actual Redis
+   - Concurrency control and queue state management
+   - Retry logic with exponential backoff
+   - Failure persistence and error tracking
+   - Order idempotency handling
+
+3. **Integration Tests (WebSocket)**:
+   - Full order lifecycle testing with real-time updates
+   - Order-specific message routing (simultaneous connections)
+   - API validation using fastify.inject
+   - Client disconnect handling
+   - Invalid order scenarios
+
+4. **Order Validation Tests**:
+   - Structure and field validation
+   - Routing logic for buy/sell orders
+   - OrderExecutor integration
 
 ## License
 MIT
